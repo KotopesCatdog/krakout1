@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Krakout — аркадный брейкаут</title>
+    <link rel="icon" href="https://foehelp.ru/favicon.png" type="image/png">
+    
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #0a0f1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', 'VT323', monospace;
+        }
+
+        .game-container {
+            padding: 20px;
+            border-radius: 48px;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(2px);
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 0 4px #2a2418, 0 10px 30px rgba(0,0,0,0.6);
+            border-radius: 12px;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            cursor: none;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 18px;
+            gap: 12px;
+            background: #000000aa;
+            backdrop-filter: blur(4px);
+            padding: 10px 24px;
+            border-radius: 60px;
+            border: 1px solid #3a4a2e;
+            flex-wrap: wrap;
+            min-height: 58px;
+        }
+
+        .level-selector,
+        .score-board,
+        .lives-board,
+        .bomb-board {
+            background: #0f0f0f;
+            padding: 6px 18px;
+            border-radius: 40px;
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+            justify-content: center;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .level-selector { width: auto; gap: 8px; }
+        .score-board { width: auto; }
+        .lives-board { width: auto; cursor: pointer; transition: 0.2s; }
+        .bomb-board { width: auto; }
+        
+        .lives-board:hover { background: #1a1a1a; }
+        .lives-board.immortal {
+            color: #ffaa44;
+            text-shadow: 0 0 8px #ff8800;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #88ff88;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            font-family: monospace;
+            color: #ffffff;
+            text-shadow: 0 0 5px #7eff5e;
+        }
+        
+        .score-board span {
+            color: #ffffff;
+            text-shadow: 0 0 5px #7eff5e;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .level-name {
+            font-size: 16px;
+            color: #88ff88;
+            font-weight: bold;
+            text-shadow: 0 0 4px #44aa44;
+            margin-left: 6px;
+            white-space: nowrap;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .level-selector select {
+            background: #2a3622;
+            border: 1px solid #7eff5e;
+            color: #d4ffb0;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 18px;
+            padding: 4px 10px;
+            border-radius: 40px;
+            cursor: pointer;
+            outline: none;
+            text-align: center;
+            min-width: 50px;
+            max-width: 60px;
+        }
+
+        button {
+            background: #2a3622;
+            border: none;
+            font-family: monospace;
+            font-weight: bold;
+            color: #d4ffb0;
+            border-radius: 40px;
+            padding: 4px 18px;
+            cursor: pointer;
+            transition: 0.1s linear;
+            font-size: 14px;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        .bonus-indicator {
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 12px;
+            background: #000000aa;
+            backdrop-filter: blur(4px);
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-family: 'Courier New', monospace;
+            color: #ffdd88;
+        }
+
+        /* Модальное окно завершения уровня */
+        .level-complete-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1002;
+        }
+
+        .level-complete-modal.active {
+            display: block;
+        }
+
+        .level-complete-content {
+            background: linear-gradient(135deg, #0a0f1e 0%, #16213e 100%);
+            border: 3px solid #4ecca3;
+            border-radius: 30px;
+            padding: 30px 50px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(78, 204, 163, 0.5);
+            animation: glowPulse 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes glowPulse {
+            from { box-shadow: 0 0 20px rgba(78, 204, 163, 0.3); }
+            to { box-shadow: 0 0 60px rgba(78, 204, 163, 0.8); }
+        }
+
+        .level-complete-icon {
+            font-size: 64px;
+            animation: bounce 0.5s ease-out;
+        }
+
+        @keyframes bounce {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .level-complete-content h2 {
+            font-size: 36px;
+            color: #4ecca3;
+            text-shadow: 0 0 10px #4ecca3;
+            margin: 10px 0 20px;
+            letter-spacing: 3px;
+        }
+
+        .level-complete-stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-icon {
+            font-size: 28px;
+        }
+
+        .stat-text {
+            color: #ffdd88;
+            text-shadow: 0 0 5px #ffaa44;
+            min-width: 50px;
+        }
+
+        .next-level-btn {
+            background: linear-gradient(90deg, #4ecca3, #3ba87f);
+            border: none;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            padding: 12px 30px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .next-level-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(78, 204, 163, 0.8);
+        }
+        
+.fox-timer-container {
+    display: flex;  /* всегда видима */
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    background: #000000aa;
+    backdrop-filter: blur(4px);
+    padding: 6px 16px;
+    border-radius: 40px;
+    font-family: 'Courier New', monospace;
+}
+
+.fox-timer-label {
+    font-size: 14px;
+    color: #ffaa44;
+    font-weight: bold;
+}
+
+.fox-timer-bar {
+    flex: 1;
+    height: 12px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.fox-timer-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #88ff88, #44ff44, #22aa22);
+    border-radius: 6px;
+    transition: width 0.1s linear;
+}
+
+.fox-timer-value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #88ff88;
+    text-shadow: 0 0 5px #44ff44;
+    min-width: 45px;
+    text-align: right;
+}
+
+        /* Модальное окно генератора */
+        .generator-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 15, 30, 0.98);
+            border: 2px solid #e94560;
+            border-radius: 20px;
+            padding: 25px;
+            z-index: 1001;
+            min-width: 400px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 0 40px rgba(233, 69, 96, 0.3);
+        }
+
+        .generator-modal.active {
+            display: block;
+        }
+
+        .generator-modal h2 {
+            color: #e94560;
+            text-align: center;
+            margin: 0 0 20px 0;
+        }
+
+        .gen-group {
+            margin-bottom: 20px;
+        }
+
+        .gen-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #88ff88;
+            font-weight: bold;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .checkbox-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: #fff;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .checkbox-group input {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .generator-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .generator-buttons button {
+            padding: 8px 25px;
+            cursor: pointer;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #e94560;
+            color: white;
+        }
+
+        .generator-modal .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #ff8888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+
+        .help-text {
+            color: #e2e2e2;
+            font-size: 14px;
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+            max-width: 400px;
+        }
+
+        .help-text p {
+            margin: 8px 0;
+        }
+
+        .help-text kbd {
+            background: #2a2a2a;
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #ffaa44;
+            border: 1px solid #555;
+        }
+
+        .exit-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0 10px;
+        }
+
+        .exit-btn {
+            background: linear-gradient(90deg, #4ecca3, #3ba87f);
+            border: none;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+        }
+
+        .exit-btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(78, 204, 163, 0.6);
+        }
+
+        .cancel-btn {
+            background: linear-gradient(90deg, #e94560, #c72a48);
+        }
+
+        .highscores-list {
+            min-width: 300px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 15px 0;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 10px;
+        }
+
+        .highscore-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+        }
+
+        .highscore-rank {
+            color: #ffaa44;
+            font-weight: bold;
+            width: 40px;
+        }
+
+        .highscore-name {
+            flex: 1;
+            color: #fff;
+        }
+
+        .highscore-score {
+            color: #4ecca3;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #aaa;
+        }
+
+        .player-name-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 40px;
+        }
+
+        .player-name-row span {
+            font-size: 16px;
+            color: #88ff88;
+        }
+
+        #playerNameInput {
+            background: #2a3622;
+            border: 1px solid #4ecca3;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            width: 120px;
+            text-align: center;
+        }
+
+        .small-btn {
+            background: #4ecca3;
+            border: none;
+            color: white;
+            font-size: 16px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .small-btn:hover {
+            transform: scale(1.05);
+            background: #3ba87f;
+        }
+        
+.paddle-modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 30, 0.95);
+    border: 3px solid #7eff5e;
+    border-radius: 20px;
+    padding: 30px;
+    z-index: 1000;
+    min-width: 500px;
+}
+
+.paddle-modal.active {
+    display: block;
+}
+
+        .paddle-modal .close-btn,
+        .generator-modal .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #ff8888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+        
+        .paddle-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.paddle-option {
+    width: 100px;
+    padding: 10px;
+    background: #1a1a2e;
+    border: 2px solid #4ecca3;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.paddle-option:hover {
+    background: #2a2a4e;
+    transform: scale(1.05);
+}
+
+.paddle-option.selected {
+    border-color: #ffaa44;
+    box-shadow: 0 0 10px #ffaa44;
+}
+
+.paddle-preview {
+    width: 60px;
+    height: 16px;
+    margin: 0 auto 8px;
+    border-radius: 8px;
+}
+
+.paddle-option span {
+    color: #fff;
+    font-size: 12px;
+}
+
+        .paddle-classic { background: linear-gradient(180deg, #a8ff60 0%, #56ab2f 50%, #2d5a1e 100%); box-shadow: 0 -2px 8px rgba(168, 255, 96, 0.5); }
+        .paddle-scifi   { background: linear-gradient(90deg, #1a1a2e 0%, #0f3460 50%, #1a1a2e 100%); border: 2px solid #e94560; box-shadow: 0 0 15px rgba(233, 69, 96, 0.5); }
+        .paddle-ice     { background: linear-gradient(180deg, rgba(200,240,255,0.9) 0%, rgba(50,150,220,0.9) 100%); border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 0 20px rgba(100,200,255,0.6); }
+        .paddle-gold    { background: linear-gradient(180deg, #ffd700 0%, #ffaa00 50%, #b8860b 100%); box-shadow: 0 0 20px rgba(255,215,0,0.5); }
+        .paddle-neon    { background: #222; border: 2px solid #0ff; box-shadow: 0 0 20px #0ff, inset 0 0 10px #0ff; }
+        .paddle-retro   { background: #0f380f; border: 3px solid #306230; box-shadow: inset 0 0 0 2px #8bac0f; }
+
+.speed-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    background: #000000aa;
+    backdrop-filter: blur(4px);
+    padding: 6px 16px;
+    border-radius: 40px;
+    font-family: 'Courier New', monospace;
+}
+
+.speed-bar-label {
+    font-size: 14px;
+    color: #88ff88;
+    font-weight: bold;
+}
+
+.speed-bar {
+    flex: 1;
+    height: 12px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.speed-bar-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #44ff88, #ffaa44, #ff4444);
+    border-radius: 6px;
+    transition: width 0.1s linear;
+}
+
+.speed-value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #ffaa44;
+    text-shadow: 0 0 5px #ff8800;
+    min-width: 45px;
+    text-align: right;
+}
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="832" height="640"></canvas>
+        
+        <div class="info-panel">
+            <div class="level-selector">
+                <span>🗺️</span>
+                <select id="levelSelect"></select>
+                <span class="level-name" id="levelName">РАДУГА</span>
+            </div>
+            <div class="score-board">
+                <span class="stat-label">🎯</span>
+                <span id="scoreValue">000000</span>
+            </div>
+            <div class="lives-board" id="livesBoard" title="Click for immortal mode">
+                <span class="stat-label">❤️</span>
+                <span class="stat-value" id="livesValue">003</span>
+            </div>
+            <div class="bomb-board" id="bombBoard">
+                <span class="stat-label">💣</span>
+                <span class="stat-value" id="bombValue">00</span>
+            </div>
+            <button id="resetButton">⭕ RESET</button>
+        </div>
+        
+        
+        
+
+        <!-- ПОЛОСКА СКОРОСТИ  -->
+        <div class="speed-bar-container">
+    <div class="speed-bar-label">⚡ SPEED</div>
+    <div class="speed-bar" id="speedBar">
+        <div class="speed-bar-fill" id="speedBarFill"></div>
+    </div>
+    <div class="speed-value" id="speedValue">1.0x</div>
+</div>
+
+<!-- ПОЛОСКА ЖИЗНИ ЛИСЫ (всегда видима) -->
+<div class="fox-timer-container" id="foxTimerContainer">
+    <div class="fox-timer-label">🦊 FOX❗</div>
+    <div class="fox-timer-bar" id="foxTimerBar">
+        <div class="fox-timer-fill" id="foxTimerFill"></div>
+    </div>
+    <div class="fox-timer-value" id="foxTimerValue">--s</div>
+</div>
+
+
+        
+        <div class="bonus-indicator" id="bonusIndicator">
+            <span style="color:#ffaa44;">H</span>elp · 
+            <span style="color:#ffaa44;">S</span>pace · 
+            <span style="color:#ffaa44;">B</span>at · 
+            <span style="color:#44ffff;">J</span> · 
+            <span style="color:#44ffff;">N</span>ext · 
+            <span style="color:#44ffff;">D</span>emo · 
+            <span style="color:#ffaa44;">T</span>op · 
+            <span style="color:#ffaa44;">L</span>vl · 
+            <span style="color:#ffaa44;">E</span>xit
+        </div>
+        
+
+        
+        
+        <div class="paddle-modal" id="paddleModal">
+            <button class="close-btn" onclick="closePaddleModal()">×</button>
+            <h2>🎮 SELECT BAT</h2>
+            <div class="paddle-options">
+                <div class="paddle-option selected" data-paddle="classic" onclick="selectPaddle('classic')">
+                    <div class="paddle-preview paddle-classic"></div>
+                    <span>CLASSIC</span>
+                </div>
+                <div class="paddle-option" data-paddle="scifi" onclick="selectPaddle('scifi')">
+                    <div class="paddle-preview paddle-scifi"></div>
+                    <span>SCI-FI</span>
+                </div>
+                <div class="paddle-option" data-paddle="ice" onclick="selectPaddle('ice')">
+                    <div class="paddle-preview paddle-ice"></div>
+                    <span>ICE</span>
+                </div>
+                <div class="paddle-option" data-paddle="gold" onclick="selectPaddle('gold')">
+                    <div class="paddle-preview paddle-gold"></div>
+                    <span>GOLD</span>
+                </div>
+                <div class="paddle-option" data-paddle="neon" onclick="selectPaddle('neon')">
+                    <div class="paddle-preview paddle-neon"></div>
+                    <span>NEON</span>
+                </div>
+                <div class="paddle-option" data-paddle="retro" onclick="selectPaddle('retro')">
+                    <div class="paddle-preview paddle-retro"></div>
+                    <span>RETRO</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно завершения уровня -->
+        <div class="level-complete-modal" id="levelCompleteModal">
+            <div class="level-complete-content">
+                <div class="level-complete-icon">🎉</div>
+                <h2>LEVEL COMPLETE!</h2>
+                <div class="level-complete-stats">
+                    <div class="stat-item">
+                        <span class="stat-icon">⭐</span>
+                        <span class="stat-text" id="completeScore">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">💣</span>
+                        <span class="stat-text" id="completeBombs">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">❤️</span>
+                        <span class="stat-text" id="completeLives">0</span>
+                    </div>
+                </div>
+                <button class="next-level-btn" onclick="closeLevelCompleteModal()">NEXT LEVEL → Press Space</button>
+            </div>
+        </div>
+
+        <!-- Модальное окно генератора уровней -->
+        <div class="generator-modal" id="generatorModal">
+            <button class="close-btn" onclick="closeGeneratorModal()">×</button>
+            <h2>🎲 ГЕНЕРАТОР УРОВНЕЙ</h2>
+            <div class="generator-content">
+                <div class="gen-group">
+                    <label>🔄 Симметрия:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" value="horizontal"> Горизонтальная</label>
+                        <label><input type="checkbox" value="vertical"> Вертикальная</label>
+                        <label><input type="checkbox" value="central"> Центральная</label>
+                        <label><input type="checkbox" value="none" checked> Без симметрии</label>
+                    </div>
+                </div>
+                <div class="gen-group">
+                    <label>🎨 Стиль фигуры:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" value="diamond"> Ромб</label>
+                        <label><input type="checkbox" value="pyramid"> Пирамида</label>
+                        <label><input type="checkbox" value="frame"> Рамка</label>
+                        <label><input type="checkbox" value="random_blobs"> Случайные фигуры</label>
+                        <label><input type="checkbox" value="rows"> Полосы</label>
+                    </div>
+                </div>
+                <div class="gen-group">
+                    <label>🌊 Движение блоков:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" value="none" checked> Нет</label>
+                        <label><input type="checkbox" value="horizontal"> Горизонтальное</label>
+                        <label><input type="checkbox" value="vertical"> Вертикальное</label>
+                        <label><input type="checkbox" value="both"> Оба направления</label>
+                    </div>
+                </div>
+                <div class="gen-group">
+                    <label>📊 Плотность блоков: <span id="densityValue">0.7</span></label>
+                    <input type="range" id="genDensity" min="0.3" max="0.9" step="0.05" value="0.7">
+                </div>
+                <div class="gen-group">
+                    <label>⚡ Сложность (спец. блоки): <span id="complexityValue">0.2</span></label>
+                    <input type="range" id="genComplexity" min="0" max="0.5" step="0.05" value="0.2">
+                </div>
+            </div>
+            <div class="generator-buttons">
+                <button onclick="closeGeneratorModal()">Отмена</button>
+                <button onclick="saveGeneratorSettings()" class="btn-primary">Сохранить</button>
+            </div>
+        </div>
+
+        <!-- Модальное окно Help -->
+        <div class="level-complete-modal" id="helpModal">
+            <div class="level-complete-content">
+              <h2>HELP</h2>
+                <div class="help-text" id="helpText">
+                    <p>🎮 <strong>УПРАВЛЕНИЕ:</strong></p>
+                    <p>• <kbd>ЛКМ</kbd> - Запуск мяча / Стрельба (ATTACK)</p>
+                    <p>• <kbd>ПКМ</kbd> - Активация бомбы 💣</p>
+                    <p>• <kbd>ПРОБЕЛ</kbd> - Пауза</p>
+                    <p>• <kbd>B</kbd> - Выбор ракетки</p>
+                    <p>• <kbd>M</kbd> - Старт - стоп музыки</p>
+                    <p>• <kbd>N</kbd> - Смена трека</p>
+                    <p>• <kbd>Е</kbd> - Топ игроков</p>
+                    <p>• <kbd>L</kbd> - Настройки генератора уровней</p>
+                    <p>• <kbd>H</kbd> - Эта справка</p>
+                    <p>• <kbd>ESC</kbd> - Выход из курсора / Закрыть окно</p>
+                    <p>• <kbd>D</kbd> - Демо-режим</p>
+                    <hr>
+                    <p>⬆️ Увеличение скорости через 20 сек.</p>
+                    <p>❤️ <strong>+1 жизнь</strong> за каждые 1000 очков</p>
+                    <p>🦊 <strong>Лиса</strong> - обожает есть мячи</p>
+                    <hr>
+                    <p>🎨 <strong>Создавайте свои уровни тут:</strong><br>
+                    <a href="https://foehelp.ru/game/lg.html" target="_blank" style="color: #4ecca3;">Редактор уровней</a></p>
+                    <p>📨 <strong>Присылайте уровни:</strong><br>
+                    <a href="https://t.me/foehelp" target="_blank" style="color: #ffaa44;">Телеграм</a></p>
+                </div>
+                <button class="next-level-btn" onclick="closeHelpModal()">OK</button>
+            </div>
+        </div>
+
+        <!-- Модальное окно выхода -->
+        <div class="level-complete-modal" id="exitModal">
+            <div class="level-complete-content">
+                <div class="level-complete-icon">🚪</div>
+                <h2>ВЫХОД ИЗ ИГРЫ</h2>
+                <div class="help-text">
+                    <p>Ваш текущий результат: <strong id="exitScore">0</strong></p>
+                    <p>Рекорд за игру: <strong id="highScore">0</strong></p>
+                    <div class="player-name-row">
+                        <span>👤 Игрок:</span>
+                        <input type="text" id="playerNameInput" maxlength="20" value="Player">
+                        <button id="savePlayerNameBtn" class="small-btn">💾</button>
+                    </div>
+                </div>
+                <div class="exit-buttons">
+                    <button class="exit-btn" onclick="saveScoreAndExit()">🏆 СОХРАНИТЬ РЕЗУЛЬТАТ</button>
+                    <button class="exit-btn cancel-btn" onclick="closeExitModal()">🔙 ПРОДОЛЖИТЬ ИГРУ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно таблицы рекордов -->
+        <div class="level-complete-modal" id="highScoresModal">
+            <div class="level-complete-content">
+                <div class="level-complete-icon">🏆</div>
+                <h2>ТАБЛИЦА РЕКОРДОВ</h2>
+                <div class="highscores-list" id="highScoresList">
+                    <div class="loading">Загрузка...</div>
+                </div>
+                <button class="next-level-btn" onclick="closeHighScoresModal()">ЗАКРЫТЬ</button>
+            </div>
+        </div>
+
+    </div>
+    
+    <link rel="stylesheet" href="js/radio-widget.css">
+    <script src="js/radio-widget.js"></script>
+
+        
+    <script src="js/levels.js?v=20250413"></script>
+    <script src="js/constants.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/background1.js"></script>
+    <script src="js/bonuses.js"></script>
+    <script src="js/paddle.js"></script>
+    <script src="js/pause-effects.js"></script>
+    <script src="js/music.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
+
+<!-- RADIO WIDGET 
+    <link rel="stylesheet" href="js/radio-widget.css">
+    <script src="js/radio-widget.js"></script>  -->
+
+<!-- ═════════════  <script src="js/levels.js?v=20250413"></script>  ══════════════════ -->
