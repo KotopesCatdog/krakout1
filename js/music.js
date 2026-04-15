@@ -130,18 +130,18 @@ document.addEventListener('keydown', (event) => {
     }
     
     // M / Ь - музыка вкл/выкл
-    if (event.code === 'KeyM' || event.key === 'm' || event.key === 'ь') {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleMusic();
-    }
+//    if (event.code === 'KeyM' || event.key === 'm' || event.key === 'ь') {
+  //      event.preventDefault();
+  //      event.stopPropagation();
+ //       toggleMusic();
+//    }
     
     // N / Т - следующий трек
-    if (event.code === 'KeyN' || event.key === 'n' || event.key === 'т') {
-        event.preventDefault();
-        event.stopPropagation();
-        if (isPlaying) nextTrack();
-    }
+//    if (event.code === 'KeyN' || event.key === 'n' || event.key === 'т') {
+//        event.preventDefault();
+//        event.stopPropagation();
+//        if (isPlaying) nextTrack();
+//    }
 });
 
 // Автозапуск после первого клика по странице
